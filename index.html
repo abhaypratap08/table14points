@@ -35,6 +35,9 @@
   button { border: 0; border-radius: 10px; background: var(--accent); color: #fff;
            font-size: 1rem; font-weight: 600; padding: 10px 16px; cursor: pointer; }
   button:hover { background: var(--accent-dark); }
+  .btns { display: flex; gap: 8px; }
+  button.minus { background: #e11d48; }
+  button.minus:hover { background: #be123c; }
   button:disabled { opacity: .5; cursor: wait; }
   h2 { font-size: 1.05rem; margin: 28px 0 10px; }
   .log { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 4px 16px; }
@@ -42,13 +45,31 @@
              border-bottom: 1px solid var(--border); font-size: .92rem; }
   .log div:last-child { border-bottom: 0; }
   .log span:last-child { color: var(--muted); }
+  [hidden] { display: none !important; }
+  #lock { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+  #lock form { background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+               padding: 24px; width: 100%; max-width: 320px; text-align: center; }
+  #lock h1 { font-size: 1.3rem; margin-bottom: 14px; }
+  #lock input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border);
+                background: var(--bg); color: var(--text); font-size: 1rem; margin-bottom: 12px; }
+  #lock button { width: 100%; }
+  #lock .bad { color: #e11d48; font-size: .9rem; margin: 0 0 10px; min-height: 1.2em; }
   .error { background: #fee2e2; color: #991b1b; padding: 12px 14px; border-radius: 10px; margin-bottom: 16px; display: none; }
 </style>
 </head>
 <body>
-<main>
+<div id="lock">
+  <form id="lockForm">
+    <h1>🔒 Points Tracker</h1>
+    <input id="pw" type="password" placeholder="Enter password" autocomplete="current-password" autofocus>
+    <div id="lockMsg" class="bad"></div>
+    <button type="submit">Unlock</button>
+  </form>
+</div>
+
+<main id="app" hidden>
   <h1>🏆 Points Tracker</h1>
-  <div class="sub">Tap <b>+₹5</b> to add points. Updates live for everyone.</div>
+  <div class="sub">Tap <b>+₹5</b> to add or <b>−₹5</b> to remove points. Updates live for everyone.</div>
 
   <div id="error" class="error"></div>
 
@@ -87,7 +108,10 @@
           <div class="name">${esc(m.name)}</div>
           <div class="pts"><strong>₹${m.points}</strong></div>
         </div>
-        <button data-id="${m.id}">+₹5</button>
+        <div class="btns">
+          <button class="minus" data-id="${m.id}" data-action="subtract_points">−₹5</button>
+          <button data-id="${m.id}" data-action="add_points">+₹5</button>
+        </div>
       </div>`).join("");
     $("total").textContent = "₹" + members.reduce((s, m) => s + m.points, 0);
   }
@@ -106,7 +130,7 @@
       .order("created_at", { ascending: false }).limit(10);
     if (error) return;
     $("log").innerHTML = data.length
-      ? data.map(r => `<div><span>${esc(r.members?.name ?? "?")} +₹${r.amount}</span>
+      ? data.map(r => `<div><span>${esc(r.members?.name ?? "?")} ${r.amount > 0 ? "+" : "−"}₹${Math.abs(r.amount)}</span>
           <span>${new Date(r.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></div>`).join("")
       : `<div><span>No activity yet</span></div>`;
   }
@@ -115,23 +139,49 @@
     const btn = e.target.closest("button[data-id]");
     if (!btn) return;
     btn.disabled = true;
-    const { data, error } = await db.rpc("add_points", { p_member_id: Number(btn.dataset.id) });
+    const { data, error } = await db.rpc(btn.dataset.action, { p_member_id: Number(btn.dataset.id) });
     btn.disabled = false;
-    if (error) return showError("Could not add points: " + error.message);
+    if (error) return showError("Could not update points: " + error.message);
     showError("");
     const m = members.find(x => x.id === Number(btn.dataset.id));
     if (m) { m.points = data; render(); }
     loadLog();
   });
 
-  // Live updates from other users
-  db.channel("points-live")
-    .on("postgres_changes", { event: "*", schema: "public", table: "members" }, loadMembers)
-    .on("postgres_changes", { event: "INSERT", schema: "public", table: "point_log" }, loadLog)
-    .subscribe();
+  function startApp() {
+    $("lock").hidden = true;
+    $("app").hidden = false;
 
-  loadMembers();
-  loadLog();
+    // Live updates from other users
+    db.channel("points-live")
+      .on("postgres_changes", { event: "*", schema: "public", table: "members" }, loadMembers)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "point_log" }, loadLog)
+      .subscribe();
+
+    loadMembers();
+    loadLog();
+  }
+
+  // ---------- Password gate (frontend only) ----------
+  const APP_PASSWORD = "1534";   // 👈 set your password here
+
+  function remembered() {
+    try { return sessionStorage.getItem("unlocked") === "1"; } catch { return false; }
+  }
+
+  $("lockForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    if ($("pw").value === APP_PASSWORD) {
+      try { sessionStorage.setItem("unlocked", "1"); } catch {}
+      startApp();
+    } else {
+      $("lockMsg").textContent = "Wrong password";
+      $("pw").value = "";
+      $("pw").focus();
+    }
+  });
+
+  if (remembered()) startApp();
 </script>
 </body>
 </html>
