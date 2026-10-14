@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Points Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root {
+    --bg: #f5f6fa; --card: #fff; --text: #1f2430; --muted: #7a8194;
+    --accent: #4f46e5; --accent-dark: #4338ca; --gold: #f59e0b; --border: #e4e7ef;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14161d; --card: #1e212b; --text: #eceef5; --muted: #8b93a7; --border: #2c3040; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+         background: var(--bg); color: var(--text); }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { margin: 0 0 4px; font-size: 1.6rem; }
+  .sub { color: var(--muted); margin-bottom: 20px; font-size: .95rem; }
+  .total { background: var(--accent); color: #fff; border-radius: 14px; padding: 14px 18px;
+           display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
+  .total b { font-size: 1.5rem; }
+  .grid { display: grid; gap: 12px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+          padding: 14px 16px; display: flex; align-items: center; gap: 14px; }
+  .rank { width: 34px; height: 34px; border-radius: 50%; background: var(--bg);
+          display: grid; place-items: center; font-weight: 700; color: var(--muted); flex: none; }
+  .card:first-child .rank { background: var(--gold); color: #fff; }
+  .info { flex: 1; min-width: 0; }
+  .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pts { color: var(--muted); font-size: .9rem; }
+  .pts strong { color: var(--text); font-size: 1.2rem; }
+  button { border: 0; border-radius: 10px; background: var(--accent); color: #fff;
+           font-size: 1rem; font-weight: 600; padding: 10px 16px; cursor: pointer; }
+  button:hover { background: var(--accent-dark); }
+  button:disabled { opacity: .5; cursor: wait; }
+  h2 { font-size: 1.05rem; margin: 28px 0 10px; }
+  .log { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 4px 16px; }
+  .log div { display: flex; justify-content: space-between; padding: 9px 0;
+             border-bottom: 1px solid var(--border); font-size: .92rem; }
+  .log div:last-child { border-bottom: 0; }
+  .log span:last-child { color: var(--muted); }
+  .error { background: #fee2e2; color: #991b1b; padding: 12px 14px; border-radius: 10px; margin-bottom: 16px; display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🏆 Points Tracker</h1>
+  <div class="sub">Tap <b>+₹5</b> to add points. Updates live for everyone.</div>
+
+  <div id="error" class="error"></div>
+
+  <div class="total"><span>Total collected</span><b id="total">₹0</b></div>
+
+  <div id="board" class="grid"></div>
+
+  <h2>Recent activity</h2>
+  <div id="log" class="log"></div>
+</main>
+
+<script>
+  // 👇 Paste your values from Supabase → Project Settings → API
+  const SUPABASE_URL = "https://rsrfbsfidwmqlattvzzp.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_VABgtixiDmwn64KC67UZ6A_dl4n04-n";
+
+  const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const $ = (id) => document.getElementById(id);
+  let members = [];
+
+  function showError(msg) {
+    const el = $("error");
+    el.textContent = msg;
+    el.style.display = msg ? "block" : "none";
+  }
+
+  const esc = (s) => String(s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  function render() {
+    const sorted = [...members].sort((a, b) => b.points - a.points || a.id - b.id);
+    $("board").innerHTML = sorted.map((m, i) => `
+      <div class="card">
+        <div class="rank">${i + 1}</div>
+        <div class="info">
+          <div class="name">${esc(m.name)}</div>
+          <div class="pts"><strong>₹${m.points}</strong></div>
+        </div>
+        <button data-id="${m.id}">+₹5</button>
+      </div>`).join("");
+    $("total").textContent = "₹" + members.reduce((s, m) => s + m.points, 0);
+  }
+
+  async function loadMembers() {
+    const { data, error } = await db.from("members").select("*").order("id");
+    if (error) return showError("Could not load members: " + error.message);
+    showError("");
+    members = data;
+    render();
+  }
+
+  async function loadLog() {
+    const { data, error } = await db.from("point_log")
+      .select("amount, created_at, members(name)")
+      .order("created_at", { ascending: false }).limit(10);
+    if (error) return;
+    $("log").innerHTML = data.length
+      ? data.map(r => `<div><span>${esc(r.members?.name ?? "?")} +₹${r.amount}</span>
+          <span>${new Date(r.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></div>`).join("")
+      : `<div><span>No activity yet</span></div>`;
+  }
+
+  $("board").addEventListener("click", async (e) => {
+    const btn = e.target.closest("button[data-id]");
+    if (!btn) return;
+    btn.disabled = true;
+    const { data, error } = await db.rpc("add_points", { p_member_id: Number(btn.dataset.id) });
+    btn.disabled = false;
+    if (error) return showError("Could not add points: " + error.message);
+    showError("");
+    const m = members.find(x => x.id === Number(btn.dataset.id));
+    if (m) { m.points = data; render(); }
+    loadLog();
+  });
+
+  // Live updates from other users
+  db.channel("points-live")
+    .on("postgres_changes", { event: "*", schema: "public", table: "members" }, loadMembers)
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "point_log" }, loadLog)
+    .subscribe();
+
+  loadMembers();
+  loadLog();
+</script>
+</body>
+</html>
