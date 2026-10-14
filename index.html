@@ -45,29 +45,11 @@
              border-bottom: 1px solid var(--border); font-size: .92rem; }
   .log div:last-child { border-bottom: 0; }
   .log span:last-child { color: var(--muted); }
-  [hidden] { display: none !important; }
-  #lock { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
-  #lock form { background: var(--card); border: 1px solid var(--border); border-radius: 14px;
-               padding: 24px; width: 100%; max-width: 320px; text-align: center; }
-  #lock h1 { font-size: 1.3rem; margin-bottom: 14px; }
-  #lock input { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border);
-                background: var(--bg); color: var(--text); font-size: 1rem; margin-bottom: 12px; }
-  #lock button { width: 100%; }
-  #lock .bad { color: #e11d48; font-size: .9rem; margin: 0 0 10px; min-height: 1.2em; }
   .error { background: #fee2e2; color: #991b1b; padding: 12px 14px; border-radius: 10px; margin-bottom: 16px; display: none; }
 </style>
 </head>
 <body>
-<div id="lock">
-  <form id="lockForm">
-    <h1>🔒 Points Tracker</h1>
-    <input id="pw" type="password" placeholder="Enter password" autocomplete="current-password" autofocus>
-    <div id="lockMsg" class="bad"></div>
-    <button type="submit">Unlock</button>
-  </form>
-</div>
-
-<main id="app" hidden>
+<main id="app">
   <h1>🏆 Points Tracker</h1>
   <div class="sub">Tap <b>+₹5</b> to add or <b>−₹5</b> to remove points. Updates live for everyone.</div>
 
@@ -138,6 +120,7 @@
   $("board").addEventListener("click", async (e) => {
     const btn = e.target.closest("button[data-id]");
     if (!btn) return;
+    if (!ensureUnlocked()) return;
     btn.disabled = true;
     const { data, error } = await db.rpc(btn.dataset.action, { p_member_id: Number(btn.dataset.id) });
     btn.disabled = false;
@@ -148,40 +131,33 @@
     loadLog();
   });
 
-  function startApp() {
-    $("lock").hidden = true;
-    $("app").hidden = false;
+  // ---------- Password for changing points (frontend only) ----------
+  const APP_PASSWORD = "8008";   // 👈 set your password here
+  let unlocked = false;
+  try { unlocked = sessionStorage.getItem("unlocked") === "1"; } catch {}
 
-    // Live updates from other users
-    db.channel("points-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "members" }, loadMembers)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "point_log" }, loadLog)
-      .subscribe();
-
-    loadMembers();
-    loadLog();
-  }
-
-  // ---------- Password gate (frontend only) ----------
-  const APP_PASSWORD = "1534";   // 👈 set your password here
-
-  function remembered() {
-    try { return sessionStorage.getItem("unlocked") === "1"; } catch { return false; }
-  }
-
-  $("lockForm").addEventListener("submit", (e) => {
-    e.preventDefault();
-    if ($("pw").value === APP_PASSWORD) {
-      try { sessionStorage.setItem("unlocked", "1"); } catch {}
-      startApp();
-    } else {
-      $("lockMsg").textContent = "Wrong password";
-      $("pw").value = "";
-      $("pw").focus();
+  function ensureUnlocked() {
+    if (unlocked) return true;
+    const entered = prompt("Enter password to change points:");
+    if (entered === null) return false;           // cancelled
+    if (entered !== APP_PASSWORD) {
+      showError("Wrong password");
+      return false;
     }
-  });
+    unlocked = true;
+    try { sessionStorage.setItem("unlocked", "1"); } catch {}
+    showError("");
+    return true;
+  }
 
-  if (remembered()) startApp();
+  // Live updates from other users
+  db.channel("points-live")
+    .on("postgres_changes", { event: "*", schema: "public", table: "members" }, loadMembers)
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "point_log" }, loadLog)
+    .subscribe();
+
+  loadMembers();
+  loadLog();
 </script>
 </body>
 </html>
