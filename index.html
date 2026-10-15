@@ -89,6 +89,10 @@
   .total-value { display: block; font-size: clamp(2rem, 6vw, 2.7rem); letter-spacing: -.06em; line-height: 1; }
   .summary-meta { display: flex; align-items: center; gap: 9px; color: rgba(255, 255, 255, .78); font-size: .84rem; text-align: right; }
   .summary-meta strong { color: #fff; }
+  .reset-row { display: flex; justify-content: flex-end; margin: -18px 0 26px; }
+  .reset-week-button { padding: 8px 11px; border: 1px solid rgba(227, 75, 112, .3); border-radius: 9px;
+    background: transparent; color: var(--danger-dark); font-size: .8rem; font-weight: 800; }
+  .reset-week-button:hover { background: rgba(227, 75, 112, .08); }
   .section-head { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
   h2 { margin: 0; font-size: 1.2rem; letter-spacing: -.025em; }
   .section-note { color: var(--muted); font-size: .8rem; }
@@ -210,6 +214,7 @@
     </div>
     <div class="summary-meta"><strong id="member-count">0 members</strong><span aria-hidden="true">•</span><span>₹5 per tap</span></div>
   </section>
+  <div class="reset-row"><button id="reset-week" class="reset-week-button" type="button">Reset week</button></div>
 
   <section aria-labelledby="leaderboard-title">
     <div class="section-head">
@@ -241,6 +246,24 @@
       <div class="modal-actions">
         <button id="cancel-password" class="secondary-button" type="button">Cancel</button>
         <button class="primary-button" type="submit">Unlock</button>
+      </div>
+    </form>
+  </section>
+</div>
+
+<div id="reset-modal" class="modal" hidden>
+  <div class="modal-backdrop" data-close-reset></div>
+  <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="reset-title" aria-describedby="reset-copy">
+    <button id="close-reset" class="close-button" type="button" aria-label="Close reset dialog">×</button>
+    <h2 id="reset-title">Reset this week's points?</h2>
+    <p id="reset-copy" class="modal-copy">All member scores will become zero. The activity log will record the points removed. Enter the reset password to continue.</p>
+    <form id="reset-form">
+      <label class="field-label" for="reset-password">Reset password</label>
+      <input id="reset-password" class="password-input" type="password" autocomplete="current-password" required>
+      <div id="reset-error" class="field-error" role="alert" hidden></div>
+      <div class="modal-actions">
+        <button id="cancel-reset" class="secondary-button" type="button">Cancel</button>
+        <button id="confirm-reset" class="primary-button" type="submit">Reset points</button>
       </div>
     </form>
   </section>
@@ -464,6 +487,47 @@
   });
   $("log").addEventListener("click", (e) => {
     if (e.target.closest("[data-retry-log]")) loadLog();
+  });
+
+  function closeResetDialog() {
+    $("reset-modal").hidden = true;
+    document.body.classList.remove("modal-open");
+    $("reset-week").focus();
+  }
+
+  $("reset-week").addEventListener("click", () => {
+    $("reset-password").value = "";
+    $("reset-error").hidden = true;
+    $("reset-modal").hidden = false;
+    document.body.classList.add("modal-open");
+    requestAnimationFrame(() => $("reset-password").focus());
+  });
+  $("cancel-reset").addEventListener("click", closeResetDialog);
+  $("close-reset").addEventListener("click", closeResetDialog);
+  $("reset-modal").addEventListener("click", (e) => {
+    if (e.target.matches("[data-close-reset]")) closeResetDialog();
+  });
+  $("reset-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const password = $("reset-password").value;
+    const submit = $("confirm-reset");
+    submit.disabled = true;
+    $("reset-error").hidden = true;
+    try {
+      const { error } = await db.rpc("reset_week", { p_password: password });
+      if (error) throw error;
+      closeResetDialog();
+      showError("");
+      await Promise.all([loadMembers(), loadLog()]);
+    } catch (error) {
+      $("reset-error").textContent = error.message || "Could not reset points. Try again.";
+      $("reset-error").hidden = false;
+    } finally {
+      submit.disabled = false;
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !$("reset-modal").hidden) closeResetDialog();
   });
 
   // Live updates from other users
