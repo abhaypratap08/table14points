@@ -7,155 +7,465 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root {
-    --bg: #f5f6fa; --card: #fff; --text: #1f2430; --muted: #7a8194;
-    --accent: #4f46e5; --accent-dark: #4338ca; --gold: #f59e0b; --border: #e4e7ef;
+    color-scheme: light;
+    --bg: #f5f7fb;
+    --card: rgba(255, 255, 255, .88);
+    --card-solid: #fff;
+    --text: #182033;
+    --muted: #68738a;
+    --faint: #98a2b6;
+    --accent: #635bff;
+    --accent-dark: #4f46e5;
+    --accent-soft: #eeedff;
+    --gold: #f59e0b;
+    --danger: #e34b70;
+    --danger-dark: #c9365d;
+    --success: #159570;
+    --border: #e4e8f1;
+    --shadow: 0 18px 45px rgba(50, 61, 95, .08);
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #14161d; --card: #1e212b; --text: #eceef5; --muted: #8b93a7; --border: #2c3040; }
+    :root {
+      color-scheme: dark;
+      --bg: #111522;
+      --card: rgba(28, 34, 52, .9);
+      --card-solid: #1c2234;
+      --text: #f2f4fb;
+      --muted: #a6aec2;
+      --faint: #7e879e;
+      --accent-soft: #292752;
+      --border: #30384f;
+      --shadow: 0 18px 45px rgba(0, 0, 0, .24);
+    }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-         background: var(--bg); color: var(--text); }
-  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
-  h1 { margin: 0 0 4px; font-size: 1.6rem; }
-  .sub { color: var(--muted); margin-bottom: 20px; font-size: .95rem; }
-  .total { background: var(--accent); color: #fff; border-radius: 14px; padding: 14px 18px;
-           display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
-  .total b { font-size: 1.5rem; }
-  .grid { display: grid; gap: 12px; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px;
-          padding: 14px 16px; display: flex; align-items: center; gap: 14px; }
-  .rank { width: 34px; height: 34px; border-radius: 50%; background: var(--bg);
-          display: grid; place-items: center; font-weight: 700; color: var(--muted); flex: none; }
-  .card:first-child .rank { background: var(--gold); color: #fff; }
+  [hidden] { display: none !important; }
+  body {
+    min-height: 100vh; margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system,
+      BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text);
+    line-height: 1.5;
+    background-image: radial-gradient(circle at 10% 0%, rgba(99, 91, 255, .13), transparent 28rem),
+      radial-gradient(circle at 100% 15%, rgba(56, 189, 248, .10), transparent 24rem);
+  }
+  body.modal-open { overflow: hidden; }
+  button, input { font: inherit; }
+  button { border: 0; cursor: pointer; }
+  button:focus-visible, input:focus-visible { outline: 3px solid rgba(99, 91, 255, .38); outline-offset: 3px; }
+  main { max-width: 880px; margin: 0 auto; padding: 34px 20px 64px; }
+  .hero { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 26px; }
+  .brand-mark {
+    width: 48px; height: 48px; display: grid; place-items: center; flex: none; border-radius: 16px;
+    background: linear-gradient(145deg, #817bff, var(--accent-dark)); color: #fff; font-size: 1.35rem;
+    font-weight: 800; box-shadow: 0 10px 22px rgba(79, 70, 229, .24);
+  }
+  .hero-copy { min-width: 0; }
+  .eyebrow, .section-kicker { margin: 0 0 3px; color: var(--accent); font-size: .7rem; font-weight: 800;
+    letter-spacing: .13em; text-transform: uppercase; }
+  h1 { margin: 0; font-size: clamp(1.65rem, 4vw, 2.1rem); letter-spacing: -.04em; line-height: 1.1; }
+  .sub { color: var(--muted); margin: 7px 0 0; font-size: .94rem; }
+  .connection {
+    display: inline-flex; align-items: center; gap: 7px; margin: 5px 0 0 auto; padding: 7px 10px;
+    border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: .76rem;
+    font-weight: 700; white-space: nowrap; background: var(--card);
+  }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+  .connection[data-state="live"] .status-dot { background: var(--success); box-shadow: 0 0 0 4px rgba(21, 149, 112, .12); }
+  .connection[data-state="offline"] .status-dot { background: var(--danger); }
+  .error {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 18px; padding: 12px 14px;
+    border: 1px solid rgba(227, 75, 112, .24); border-radius: 14px; background: rgba(255, 235, 240, .9);
+    color: #a7284b; font-size: .9rem;
+  }
+  @media (prefers-color-scheme: dark) { .error { background: rgba(92, 31, 52, .45); color: #ff9ab2; } }
+  .error-message { flex: 1; min-width: 0; }
+  .text-button { padding: 5px 2px; background: transparent; color: inherit; font-weight: 800; text-decoration: underline; }
+  .summary {
+    display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 30px;
+    padding: 24px 26px; border: 1px solid rgba(255, 255, 255, .25); border-radius: 22px;
+    background: linear-gradient(125deg, #655df7, #4f46c9 65%, #443cae); color: #fff;
+    box-shadow: 0 16px 28px rgba(79, 70, 229, .21);
+  }
+  .total-label { display: block; margin-bottom: 3px; color: rgba(255, 255, 255, .72); font-size: .82rem; font-weight: 700; }
+  .total-value { display: block; font-size: clamp(2rem, 6vw, 2.7rem); letter-spacing: -.06em; line-height: 1; }
+  .summary-meta { display: flex; align-items: center; gap: 9px; color: rgba(255, 255, 255, .78); font-size: .84rem; text-align: right; }
+  .summary-meta strong { color: #fff; }
+  .section-head { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin-bottom: 13px; }
+  h2 { margin: 0; font-size: 1.2rem; letter-spacing: -.025em; }
+  .section-note { color: var(--muted); font-size: .8rem; }
+  .grid { display: grid; gap: 11px; }
+  .card {
+    position: relative; display: flex; align-items: center; gap: 13px; padding: 15px 16px;
+    border: 1px solid var(--border); border-radius: 17px; background: var(--card); box-shadow: var(--shadow);
+    transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+  }
+  .card:hover { border-color: rgba(99, 91, 255, .42); box-shadow: 0 15px 30px rgba(50, 61, 95, .12); transform: translateY(-1px); }
+  .card.leader { border-color: rgba(245, 158, 11, .42); }
+  .rank { width: 32px; height: 32px; display: grid; place-items: center; flex: none; border-radius: 10px;
+    background: var(--accent-soft); color: var(--accent); font-size: .84rem; font-weight: 800; }
+  .card.leader .rank { background: var(--gold); color: #fff; }
+  .avatar { width: 38px; height: 38px; display: grid; place-items: center; flex: none; border-radius: 50%;
+    background: linear-gradient(145deg, #d8d6ff, #aaa6ff); color: #4039a9; font-size: .76rem; font-weight: 800; }
   .info { flex: 1; min-width: 0; }
-  .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .pts { color: var(--muted); font-size: .9rem; }
-  .pts strong { color: var(--text); font-size: 1.2rem; }
-  button { border: 0; border-radius: 10px; background: var(--accent); color: #fff;
-           font-size: 1rem; font-weight: 600; padding: 10px 16px; cursor: pointer; }
-  button:hover { background: var(--accent-dark); }
-  .btns { display: flex; gap: 8px; }
-  button.minus { background: #e11d48; }
-  button.minus:hover { background: #be123c; }
-  button:disabled { opacity: .5; cursor: wait; }
-  h2 { font-size: 1.05rem; margin: 28px 0 10px; }
-  .log { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 4px 16px; }
-  .log div { display: flex; justify-content: space-between; padding: 9px 0;
-             border-bottom: 1px solid var(--border); font-size: .92rem; }
-  .log div:last-child { border-bottom: 0; }
-  .log span:last-child { color: var(--muted); }
-  .error { background: #fee2e2; color: #991b1b; padding: 12px 14px; border-radius: 10px; margin-bottom: 16px; display: none; }
+  .name-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .name { overflow: hidden; color: var(--text); font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+  .leader-badge { padding: 2px 6px; border-radius: 999px; background: rgba(245, 158, 11, .14); color: #b66b00;
+    font-size: .64rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+  .points-line { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
+  .pts { color: var(--muted); font-size: .78rem; }
+  .pts strong { color: var(--text); font-size: 1.1rem; }
+  .progress { height: 5px; margin-top: 8px; overflow: hidden; border-radius: 99px; background: var(--accent-soft); }
+  .progress-bar { height: 100%; border-radius: inherit; background: linear-gradient(90deg, #817bff, var(--accent)); transition: width .3s ease; }
+  .btns { display: flex; gap: 7px; flex: none; }
+  .point-button {
+    min-width: 68px; min-height: 42px; padding: 9px 12px; border-radius: 11px; color: #fff; font-size: .88rem;
+    font-weight: 800; transition: background .18s ease, transform .18s ease, opacity .18s ease;
+  }
+  .point-button:hover:not(:disabled) { transform: translateY(-1px); }
+  .point-button.add { background: var(--accent); }
+  .point-button.add:hover:not(:disabled) { background: var(--accent-dark); }
+  .point-button.minus { background: var(--danger); }
+  .point-button.minus:hover:not(:disabled) { background: var(--danger-dark); }
+  .point-button:disabled { cursor: wait; opacity: .46; }
+  .card.is-saving { border-color: rgba(99, 91, 255, .5); }
+  .card.is-saving .point-button { opacity: .55; }
+  .card.is-saving .point-button:disabled { opacity: .75; }
+  .saving-note { color: var(--accent); font-size: .7rem; font-weight: 800; }
+  .empty-state, .log-empty { padding: 28px 20px; border: 1px dashed var(--border); border-radius: 17px; color: var(--muted);
+    text-align: center; background: rgba(255, 255, 255, .35); }
+  .empty-state strong { display: block; margin-bottom: 4px; color: var(--text); }
+  .skeleton { height: 88px; border-radius: 17px; background: linear-gradient(90deg, var(--card) 25%, var(--accent-soft) 50%, var(--card) 75%);
+    background-size: 200% 100%; animation: shimmer 1.35s infinite; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+  .activity { margin-top: 32px; }
+  .log { overflow: hidden; border: 1px solid var(--border); border-radius: 17px; background: var(--card); box-shadow: var(--shadow); }
+  .log-entry { display: flex; align-items: center; gap: 11px; padding: 13px 16px; border-bottom: 1px solid var(--border); }
+  .log-entry:last-child { border-bottom: 0; }
+  .log-icon { width: 30px; height: 30px; display: grid; place-items: center; flex: none; border-radius: 9px;
+    background: #e8f8f1; color: var(--success); font-weight: 900; }
+  .log-icon.minus { background: #fff0f3; color: var(--danger); }
+  .log-copy { min-width: 0; flex: 1; overflow: hidden; }
+  .log-copy strong { display: block; overflow: hidden; font-size: .87rem; text-overflow: ellipsis; white-space: nowrap; }
+  .log-copy span { color: var(--muted); font-size: .75rem; }
+  .log-time { flex: none; color: var(--muted); font-size: .75rem; }
+  .retry-inline { margin-top: 10px; padding: 7px 12px; border-radius: 9px; background: var(--accent-soft); color: var(--accent-dark); font-size: .8rem; font-weight: 800; }
+  .modal { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 20px; }
+  .modal-backdrop { position: absolute; inset: 0; background: rgba(13, 18, 35, .58); backdrop-filter: blur(5px); }
+  .modal-card { position: relative; width: min(100%, 390px); padding: 24px; border: 1px solid var(--border); border-radius: 20px;
+    background: var(--card-solid); box-shadow: 0 25px 70px rgba(0, 0, 0, .25); }
+  .modal-card h2 { margin-bottom: 5px; }
+  .modal-copy { margin: 0 0 18px; color: var(--muted); font-size: .88rem; }
+  .close-button { position: absolute; top: 13px; right: 13px; width: 30px; height: 30px; border-radius: 8px; background: transparent; color: var(--muted); font-size: 1.2rem; }
+  .close-button:hover { background: var(--accent-soft); color: var(--text); }
+  .field-label { display: block; margin-bottom: 7px; font-size: .78rem; font-weight: 800; }
+  .password-input { width: 100%; padding: 11px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); color: var(--text); }
+  .field-error { margin-top: 7px; color: var(--danger-dark); font-size: .78rem; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+  .secondary-button, .primary-button { padding: 10px 14px; border-radius: 10px; font-size: .86rem; font-weight: 800; }
+  .secondary-button { background: var(--accent-soft); color: var(--accent-dark); }
+  .primary-button { background: var(--accent); color: #fff; }
+  @media (max-width: 640px) {
+    main { padding: 25px 16px 48px; }
+    .summary { align-items: flex-start; flex-direction: column; padding: 21px; }
+    .summary-meta { text-align: left; }
+  }
+  @media (max-width: 480px) {
+    .hero { gap: 11px; }
+    .brand-mark { width: 42px; height: 42px; border-radius: 13px; }
+    .connection { margin-top: 1px; padding: 6px 8px; }
+    .connection span:last-child { display: none; }
+    .card { display: grid; grid-template-columns: auto 1fr; gap: 10px 11px; }
+    .info { grid-column: 2; grid-row: 1; }
+    .btns { grid-column: 1 / -1; width: 100%; }
+    .point-button { flex: 1; }
+    .avatar { width: 34px; height: 34px; grid-column: 1; grid-row: 1; }
+    .rank { position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border-radius: 7px; font-size: .7rem; }
+    .name-row { padding-right: 27px; }
+    .section-head { align-items: flex-start; flex-direction: column; gap: 3px; }
+  }
 </style>
 </head>
 <body>
 <main id="app">
-  <h1>🏆 Points Tracker</h1>
-  <div class="sub">Tap <b>+₹5</b> to add or <b>−₹5</b> to remove points. Updates live for everyone.</div>
+  <header class="hero">
+    <div class="brand-mark" aria-hidden="true">₹</div>
+    <div class="hero-copy">
+      <p class="eyebrow">Live scoreboard</p>
+      <h1>Points tracker</h1>
+      <p class="sub">Tap <b>+₹5</b> to add points or <b>−₹5</b> to remove them.</p>
+    </div>
+    <div id="connection" class="connection" data-state="connecting" aria-live="polite">
+      <span class="status-dot" aria-hidden="true"></span><span id="connection-label">Connecting</span>
+    </div>
+  </header>
 
-  <div id="error" class="error"></div>
+  <div id="error" class="error" role="alert" aria-live="assertive" hidden>
+    <span id="error-message" class="error-message"></span>
+    <button id="retry" class="text-button" type="button" hidden>Retry</button>
+  </div>
 
-  <div class="total"><span>Total collected</span><b id="total">₹0</b></div>
+  <section class="summary" aria-labelledby="summary-label">
+    <div>
+      <span id="summary-label" class="total-label">Total collected</span>
+      <strong id="total" class="total-value" aria-live="polite">₹0</strong>
+    </div>
+    <div class="summary-meta"><strong id="member-count">0 members</strong><span aria-hidden="true">•</span><span>₹5 per tap</span></div>
+  </section>
 
-  <div id="board" class="grid"></div>
+  <section aria-labelledby="leaderboard-title">
+    <div class="section-head">
+      <div><p class="section-kicker">Leaderboard</p><h2 id="leaderboard-title">Top scores</h2></div>
+      <span class="section-note">Highest score ranks first</span>
+    </div>
+    <div id="board" class="grid" aria-live="polite" aria-busy="true"></div>
+  </section>
 
-  <h2>Recent activity</h2>
-  <div id="log" class="log"></div>
+  <section class="activity" aria-labelledby="activity-title">
+    <div class="section-head">
+      <div><p class="section-kicker">Activity</p><h2 id="activity-title">Recent updates</h2></div>
+      <span class="section-note">Last 10 changes</span>
+    </div>
+    <div id="log" class="log" aria-live="polite" aria-busy="true"></div>
+  </section>
 </main>
+
+<div id="password-modal" class="modal" hidden>
+  <div class="modal-backdrop" data-close-password></div>
+  <section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="password-title" aria-describedby="password-copy">
+    <button id="close-password" class="close-button" type="button" aria-label="Close password dialog">×</button>
+    <h2 id="password-title">Unlock score controls</h2>
+    <p id="password-copy" class="modal-copy">Enter the password to change points for this session.</p>
+    <form id="password-form">
+      <label class="field-label" for="password-input">Password</label>
+      <input id="password-input" class="password-input" type="password" inputmode="numeric" autocomplete="current-password" required>
+      <div id="password-error" class="field-error" role="alert" hidden>Wrong password. Try again.</div>
+      <div class="modal-actions">
+        <button id="cancel-password" class="secondary-button" type="button">Cancel</button>
+        <button class="primary-button" type="submit">Unlock</button>
+      </div>
+    </form>
+  </section>
+</div>
 
 <script>
   // 👇 Paste your values from Supabase → Project Settings → API
-  const SUPABASE_URL = "https://rsrfbsfidwmqlattvzzp.supabase.co";
-  const SUPABASE_ANON_KEY = "sb_publishable_VABgtixiDmwn64KC67UZ6A_dl4n04-n";
+  const SUPABASE_URL = "https://hnrltqtlkwpucmoipebe.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_ZqJ7xN12xNXUJcGgVYWv3g_SsgYuUar";
 
   const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const $ = (id) => document.getElementById(id);
   let members = [];
+  let updatingId = null;
+  let unlockPromise = null;
+  let unlockResolver = null;
+  let lastFocusedElement = null;
+  const LEADER_NAME = "debvrat";
 
-  function showError(msg) {
+  function setConnection(state, label) {
+    $("connection").dataset.state = state;
+    $("connection-label").textContent = label;
+  }
+
+  function showError(msg, canRetry = false) {
     const el = $("error");
-    el.textContent = msg;
-    el.style.display = msg ? "block" : "none";
+    $("error-message").textContent = msg;
+    $("retry").hidden = !canRetry;
+    el.hidden = !msg;
   }
 
   const esc = (s) => String(s).replace(/[&<>"']/g, c =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const initials = (name) => String(name).trim().split(/\s+/).map(word => word[0]).join("").slice(0, 2).toUpperCase() || "?";
 
   function render() {
-    const sorted = [...members].sort((a, b) => b.points - a.points || a.id - b.id);
-    $("board").innerHTML = sorted.map((m, i) => `
-      <div class="card">
+    const sorted = [...members].sort((a, b) => {
+      const byPoints = (Number(b.points) || 0) - (Number(a.points) || 0);
+      if (byPoints) return byPoints;
+      const aIsLeader = String(a.name).trim().toLowerCase() === LEADER_NAME;
+      const bIsLeader = String(b.name).trim().toLowerCase() === LEADER_NAME;
+      if (aIsLeader !== bIsLeader) return aIsLeader ? -1 : 1;
+      return a.id - b.id;
+    });
+    const maxPoints = Math.max(5, ...sorted.map(m => Number(m.points) || 0));
+    $("board").setAttribute("aria-busy", "false");
+    $("board").innerHTML = sorted.length ? sorted.map((m, i) => {
+      const isSaving = updatingId === m.id;
+      const isLeader = i === 0;
+      const points = Number(m.points) || 0;
+      const progress = Math.min(100, Math.round((points / maxPoints) * 100));
+      return `
+      <article class="card${isLeader ? " leader" : ""}${isSaving ? " is-saving" : ""}" data-member-card="${m.id}" aria-busy="${isSaving}">
         <div class="rank">${i + 1}</div>
+        <div class="avatar" aria-hidden="true">${esc(initials(m.name))}</div>
         <div class="info">
-          <div class="name">${esc(m.name)}</div>
-          <div class="pts"><strong>₹${m.points}</strong></div>
+          <div class="name-row"><span class="name">${esc(m.name)}</span>${isLeader ? '<span class="leader-badge">Leader</span>' : ""}</div>
+          <div class="points-line"><span class="pts"><strong>₹${points}</strong> points</span>${isSaving ? '<span class="saving-note">Saving…</span>' : ""}</div>
+          <div class="progress" aria-hidden="true"><div class="progress-bar" style="width: ${progress}%"></div></div>
         </div>
         <div class="btns">
-          <button class="minus" data-id="${m.id}" data-action="subtract_points">−₹5</button>
-          <button data-id="${m.id}" data-action="add_points">+₹5</button>
+          <button class="point-button minus" data-id="${m.id}" data-action="subtract_points" aria-label="Remove 5 rupees from ${esc(m.name)}" ${isSaving || points < 5 ? "disabled" : ""}>− ₹5</button>
+          <button class="point-button add" data-id="${m.id}" data-action="add_points" aria-label="Add 5 rupees to ${esc(m.name)}" ${isSaving ? "disabled" : ""}>+ ₹5</button>
         </div>
-      </div>`).join("");
-    $("total").textContent = "₹" + members.reduce((s, m) => s + m.points, 0);
+      </article>`;
+    }).join("") : `
+      <div class="empty-state"><strong>No members yet</strong><span>Add members in Supabase to see the leaderboard.</span></div>`;
+    $("total").textContent = "₹" + members.reduce((sum, m) => sum + (Number(m.points) || 0), 0);
+    $("member-count").textContent = `${members.length} member${members.length === 1 ? "" : "s"}`;
   }
 
-  async function loadMembers() {
+  function showBoardLoading() {
+    $("board").setAttribute("aria-busy", "true");
+    $("board").innerHTML = Array.from({ length: 5 }, () => '<div class="skeleton" aria-hidden="true"></div>').join("");
+  }
+
+  function showLogLoading() {
+    $("log").setAttribute("aria-busy", "true");
+    $("log").innerHTML = '<div class="log-empty">Loading activity…</div>';
+  }
+
+  async function loadMembers({ showLoading = false } = {}) {
+    if (showLoading) showBoardLoading();
     const { data, error } = await db.from("members").select("*").order("id");
-    if (error) return showError("Could not load members: " + error.message);
+    if (error) {
+      $("board").setAttribute("aria-busy", "false");
+      $("board").innerHTML = '<div class="empty-state"><strong>Leaderboard unavailable</strong><span>Check your connection and try again.</span></div>';
+      return showError("Could not load members: " + error.message, true);
+    }
     showError("");
-    members = data;
+    members = data ?? [];
     render();
   }
 
   async function loadLog() {
+    showLogLoading();
     const { data, error } = await db.from("point_log")
       .select("amount, created_at, members(name)")
       .order("created_at", { ascending: false }).limit(10);
-    if (error) return;
-    $("log").innerHTML = data.length
-      ? data.map(r => `<div><span>${esc(r.members?.name ?? "?")} ${r.amount > 0 ? "+" : "−"}₹${Math.abs(r.amount)}</span>
-          <span>${new Date(r.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></div>`).join("")
-      : `<div><span>No activity yet</span></div>`;
+    $("log").setAttribute("aria-busy", "false");
+    if (error) {
+      $("log").innerHTML = '<div class="log-empty"><strong>Activity unavailable</strong><br><button class="retry-inline" type="button" data-retry-log>Try again</button></div>';
+      return;
+    }
+    $("log").innerHTML = data?.length
+      ? data.map(r => {
+        const amount = Number(r.amount) || 0;
+        const positive = amount > 0;
+        return `<div class="log-entry">
+          <div class="log-icon${positive ? "" : " minus"}" aria-hidden="true">${positive ? "+" : "−"}</div>
+          <div class="log-copy"><strong>${esc(r.members?.name ?? "Unknown member")}</strong><span>${positive ? "Added" : "Removed"} ₹${Math.abs(amount)}</span></div>
+          <time class="log-time" datetime="${esc(r.created_at)}">${new Date(r.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
+        </div>`;
+      }).join("")
+      : '<div class="log-empty">No activity yet — your first update will appear here.</div>';
   }
 
   $("board").addEventListener("click", async (e) => {
+    const retry = e.target.closest("[data-retry]");
+    if (retry) {
+      loadMembers({ showLoading: true });
+      loadLog();
+      return;
+    }
     const btn = e.target.closest("button[data-id]");
-    if (!btn) return;
-    if (!ensureUnlocked()) return;
-    btn.disabled = true;
-    const { data, error } = await db.rpc(btn.dataset.action, { p_member_id: Number(btn.dataset.id) });
-    btn.disabled = false;
-    if (error) return showError("Could not update points: " + error.message);
-    showError("");
-    const m = members.find(x => x.id === Number(btn.dataset.id));
-    if (m) { m.points = data; render(); }
-    loadLog();
+    if (!btn || btn.disabled) return;
+    if (!(await ensureUnlocked())) return;
+
+    const memberId = Number(btn.dataset.id);
+    updatingId = memberId;
+    render();
+    try {
+      const { data, error } = await db.rpc(btn.dataset.action, { p_member_id: memberId });
+      if (error) {
+        showError("Could not update points: " + error.message);
+        return;
+      }
+      showError("");
+      const member = members.find(x => x.id === memberId);
+      if (member) member.points = Number(data) || 0;
+      render();
+      loadLog();
+    } catch (error) {
+      showError("Could not update points: " + (error.message || "Please try again."));
+    } finally {
+      updatingId = null;
+      render();
+    }
   });
 
   // ---------- Password for changing points (frontend only) ----------
-  const APP_PASSWORD = "8008";   // 👈 set your password here
+  const APP_PASSWORD = "0101";   // 👈 set your password here
   let unlocked = false;
   try { unlocked = sessionStorage.getItem("unlocked") === "1"; } catch {}
 
+  function openPasswordDialog() {
+    lastFocusedElement = document.activeElement;
+    $("password-modal").hidden = false;
+    $("password-error").hidden = true;
+    $("password-input").value = "";
+    document.body.classList.add("modal-open");
+    requestAnimationFrame(() => $("password-input").focus());
+  }
+
+  function closePasswordDialog(result) {
+    $("password-modal").hidden = true;
+    document.body.classList.remove("modal-open");
+    const resolve = unlockResolver;
+    unlockResolver = null;
+    unlockPromise = null;
+    if (lastFocusedElement?.focus) lastFocusedElement.focus();
+    if (resolve) resolve(result);
+  }
+
   function ensureUnlocked() {
-    if (unlocked) return true;
-    const entered = prompt("Enter password to change points:");
-    if (entered === null) return false;           // cancelled
-    if (entered !== APP_PASSWORD) {
-      showError("Wrong password");
-      return false;
+    if (unlocked) return Promise.resolve(true);
+    if (unlockPromise) return unlockPromise;
+    unlockPromise = new Promise(resolve => {
+      unlockResolver = resolve;
+      openPasswordDialog();
+    });
+    return unlockPromise;
+  }
+
+  $("password-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    if ($("password-input").value !== APP_PASSWORD) {
+      $("password-error").hidden = false;
+      $("password-input").select();
+      return;
     }
     unlocked = true;
     try { sessionStorage.setItem("unlocked", "1"); } catch {}
     showError("");
-    return true;
-  }
+    closePasswordDialog(true);
+  });
+  $("cancel-password").addEventListener("click", () => closePasswordDialog(false));
+  $("close-password").addEventListener("click", () => closePasswordDialog(false));
+  $("password-modal").addEventListener("click", (e) => {
+    if (e.target.matches("[data-close-password]")) closePasswordDialog(false);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !$("password-modal").hidden) closePasswordDialog(false);
+  });
+
+  $("retry").addEventListener("click", () => {
+    showError("");
+    loadMembers({ showLoading: true });
+    loadLog();
+  });
+  $("log").addEventListener("click", (e) => {
+    if (e.target.closest("[data-retry-log]")) loadLog();
+  });
 
   // Live updates from other users
   db.channel("points-live")
     .on("postgres_changes", { event: "*", schema: "public", table: "members" }, loadMembers)
     .on("postgres_changes", { event: "INSERT", schema: "public", table: "point_log" }, loadLog)
-    .subscribe();
+    .subscribe((status) => {
+      if (status === "SUBSCRIBED") setConnection("live", "Live");
+      else if (["CHANNEL_ERROR", "TIMED_OUT", "CLOSED"].includes(status)) setConnection("offline", "Offline");
+      else setConnection("connecting", "Connecting");
+    });
 
+  showBoardLoading();
   loadMembers();
   loadLog();
 </script>
