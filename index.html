@@ -275,19 +275,27 @@
   const esc = (s) => String(s).replace(/[&<>"']/g, c =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const initials = (name) => String(name).trim().split(/\s+/).map(word => word[0]).join("").slice(0, 2).toUpperCase() || "?";
+  const normalizeMemberName = (name) => {
+    const cleaned = String(name ?? "").trim();
+    const lower = cleaned.toLowerCase();
+    if (lower === "ayushi") return "Aayushi";
+    if (lower === "debvrat") return "Devbrat";
+    return cleaned;
+  };
 
   function render() {
     const sorted = [...members].sort((a, b) => {
-      const byPoints = (Number(b.points) || 0) - (Number(a.points) || 0);
-      if (byPoints) return byPoints;
       const aIsLeader = String(a.name).trim().toLowerCase() === LEADER_NAME;
       const bIsLeader = String(b.name).trim().toLowerCase() === LEADER_NAME;
       if (aIsLeader !== bIsLeader) return aIsLeader ? -1 : 1;
+      const byPoints = (Number(b.points) || 0) - (Number(a.points) || 0);
+      if (byPoints) return byPoints;
       return a.id - b.id;
     });
     const maxPoints = Math.max(5, ...sorted.map(m => Number(m.points) || 0));
     $("board").setAttribute("aria-busy", "false");
     $("board").innerHTML = sorted.length ? sorted.map((m, i) => {
+      const normalizedName = normalizeMemberName(m.name);
       const isSaving = updatingId === m.id;
       const isLeader = i === 0;
       const points = Number(m.points) || 0;
@@ -295,9 +303,9 @@
       return `
       <article class="card${isLeader ? " leader" : ""}${isSaving ? " is-saving" : ""}" data-member-card="${m.id}" aria-busy="${isSaving}">
         <div class="rank">${i + 1}</div>
-        <div class="avatar" aria-hidden="true">${esc(initials(m.name))}</div>
+        <div class="avatar" aria-hidden="true">${esc(initials(normalizedName))}</div>
         <div class="info">
-          <div class="name-row"><span class="name">${esc(m.name)}</span>${isLeader ? '<span class="leader-badge">Leader</span>' : ""}</div>
+          <div class="name-row"><span class="name">${esc(normalizedName)}</span>${isLeader ? '<span class="leader-badge">Leader</span>' : ""}</div>
           <div class="points-line"><span class="pts"><strong>₹${points}</strong> points</span>${isSaving ? '<span class="saving-note">Saving…</span>' : ""}</div>
           <div class="progress" aria-hidden="true"><div class="progress-bar" style="width: ${progress}%"></div></div>
         </div>
@@ -331,7 +339,10 @@
       return showError("Could not load members: " + error.message, true);
     }
     showError("");
-    members = data ?? [];
+    members = (data ?? []).map(member => ({
+      ...member,
+      name: normalizeMemberName(member.name)
+    }));
     render();
   }
 
