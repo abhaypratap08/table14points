@@ -86,10 +86,10 @@ create policy "Anyone can read point log"
 
 insert into public.members (id, name, points)
 values
-  (1, 'Ayushi', 0),
+  (1, 'Aayushi', 0),
   (2, 'Abhay', 0),
   (3, 'Saniya', 0),
-  (4, 'Debvrat', 0),
+  (4, 'Devbrat', 0),
   (5, 'Madhav', 0),
   (6, 'Sumit', 0)
 on conflict (id) do update
